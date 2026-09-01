@@ -5,6 +5,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/e2e/gateway/alb_tests"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/e2e/gateway/nlb_tests"
 )
 
 func TestChainedGateway(t *testing.T) {
@@ -14,4 +16,7 @@ func TestChainedGateway(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Expect(InitTF()).To(Succeed())
+	// Init imported packages' tf; their Describes are transitively registered here.
+	Expect(alb_tests.InitTF()).To(Succeed())
+	Expect(nlb_tests.InitTF()).To(Succeed())
 })
