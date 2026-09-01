@@ -30,7 +30,7 @@ func (s *NLBTestStack) Deploy(ctx context.Context, f *framework.Framework, auxil
 
 	dpUDP := test_resources.BuildUDPDeploymentSpec()
 	svcUDP := test_resources.BuildUDPServiceSpec()
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	listeners := []gwv1.Listener{
 		{
@@ -91,7 +91,7 @@ func (s *NLBTestStack) DeployTCPWeightedStack(ctx context.Context, f *framework.
 	svcTCP2 := test_resources.BuildServiceSpec(dpTCP2.Spec.Selector.MatchLabels)
 	svcTCP2.Name = svcTCP2.Name + "-2"
 
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	listeners := []gwv1.Listener{
 		{
@@ -156,7 +156,7 @@ func (s *NLBTestStack) DeployTCPWeightedStack(ctx context.Context, f *framework.
 func (s *NLBTestStack) DeployTCP_UDP(ctx context.Context, f *framework.Framework, lbConfSpec elbv2gw.LoadBalancerConfigurationSpec, tgConfSpec elbv2gw.TargetGroupConfigurationSpec, readinessGateEnabled bool) error {
 	dpUDP := test_resources.BuildUDPDeploymentSpec()
 	svcUDP := test_resources.BuildUDPServiceSpec()
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	listeners := []gwv1.Listener{
 		{
@@ -190,7 +190,7 @@ func (s *NLBTestStack) DeployQUIC(ctx context.Context, f *framework.Framework, l
 
 	dpUDP.Spec.Template.Annotations = make(map[string]string)
 	dpUDP.Spec.Template.Annotations["service.beta.kubernetes.io/aws-load-balancer-quic-enabled-containers"] = "app"
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	gw := test_resources.BuildBasicGatewaySpec(gwc, []gwv1.Listener{
 		{
@@ -218,7 +218,7 @@ func (s *NLBTestStack) DeployTCP_QUIC(ctx context.Context, f *framework.Framewor
 	dpUDP.Spec.Template.Annotations = make(map[string]string)
 	dpUDP.Spec.Template.Annotations["service.beta.kubernetes.io/aws-load-balancer-quic-enabled-containers"] = "app"
 
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	gw := test_resources.BuildBasicGatewaySpec(gwc, []gwv1.Listener{
 		{
@@ -278,7 +278,7 @@ func (s *NLBTestStack) DeployWithDefaultTGC(ctx context.Context, f *framework.Fr
 		},
 	})}
 
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 	gw := test_resources.BuildBasicGatewaySpec(gwc, listeners)
 	lbc := test_resources.BuildLoadBalancerConfig(f, lbConfSpec)
 
@@ -294,7 +294,7 @@ func (s *NLBTestStack) DeployWithDefaultTGC(ctx context.Context, f *framework.Fr
 }
 
 func (s *NLBTestStack) DeployFrontendNLB(ctx context.Context, albStack alb_tests.ALBTestStack, f *framework.Framework, lbConfSpec elbv2gw.LoadBalancerConfigurationSpec, hasTLS bool, readinessGateEnabled bool) error {
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	listeners := []gwv1.Listener{
 		{
@@ -609,7 +609,7 @@ func weightedRequestValidation(tf *framework.Framework, url string) {
 func (s *NLBTestStack) DeployListenerMismatch(ctx context.Context, f *framework.Framework, lbConfSpec elbv2gw.LoadBalancerConfigurationSpec, tgConfSpec elbv2gw.TargetGroupConfigurationSpec, readinessGateEnabled bool) error {
 	dpTCP := test_resources.BuildDeploymentSpec(f.Options.TestImageRegistry)
 	svcTCP := test_resources.BuildServiceSpec(map[string]string{})
-	gwc := test_resources.BuildGatewayClassSpec("gateway.k8s.aws/nlb")
+	gwc := test_resources.BuildGatewayClassSpec(test_resources.NLBGatewayControllerName)
 
 	listeners := []gwv1.Listener{
 		{
@@ -708,6 +708,20 @@ func validateTCPRouteListenerMismatch(tf *framework.Framework, stack NLBTestStac
 			},
 		},
 	})
+}
+
+// verifyUDPUnlessSkipped is the UDP-echo assertion used by the NLB specs.
+// On IPv4 clusters it is a no-op: UDP over an NLB IP/instance target group has
+// preserve_client_ip locked to true (AWS constraint), so replies bypass the NLB
+// return path and the client times out unless the NLB is configured with
+// SourceNatIpv4Prefix. That field is not yet in the fork's LoadBalancerConfiguration
+// CRD, so IPv4 UDP verification is skipped. Delete this shim once IPv4 source-NAT
+// support lands and configureIPv6SourceNAT is generalised to also configure it.
+func verifyUDPUnlessSkipped(tf *framework.Framework, endpoint string) error {
+	if tf.Options.IPFamily != framework.IPv6 {
+		return nil
+	}
+	return tf.UDPVerifier.VerifyUDP(endpoint)
 }
 
 func configureIPv6SourceNAT(ctx context.Context, tf *framework.Framework, lbcSpec *elbv2gw.LoadBalancerConfigurationSpec) {
